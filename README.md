@@ -16,7 +16,7 @@ Implements [Reformer: The Efficient Transformer](https://openreview.net/forum?id
 
 ### Running the code
 
-- `python3 trainer.py -c \path\to\config\yaml -n [name of run] -b [batch size] -f [fast dev run] -v [resume version number]
+- `python3 trainer.py -c \path\to\config\yaml -n [name of run] -b [batch size] -f [fast dev run] -v [resume version number]`
 - The `-f` flag is used for debugging; only one batch of training, validation, and testing will be calculated.
 - The `-v` flag is used for resuming from checkpoints; leave empty for new version.
 
