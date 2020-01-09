@@ -1,0 +1,29 @@
+model:
+  d_model: 256
+  head: 8
+  n_buckets: 64
+  rounds: 4
+  dropout: 0.1
+  vocab: 128
+  N: 1
+  d_ff: 256
+---
+data:
+  name: 'Copy'
+  path: 'path'
+  dataset_length: 1024
+  max_data_length: 1024
+  data_length: 1024
+  max_value: 127
+---
+train:
+  num_workers: 4
+  accumulate: 8
+  lr: 0.001
+  epochs: 10000
+---
+log:
+  path: 'logs'
+---
+chkpt:
+  path: 'chkpts'
