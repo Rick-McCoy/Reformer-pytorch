@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from model.feedforward import ChunkFeedForward
 from model.attention import MultiRoundLSHAttention
+from model.reversible import Reversible
 
 class Decoder(nn.Module):
     def __init__(self, hp, args):
@@ -11,7 +12,7 @@ class Decoder(nn.Module):
     
     def forward(self, x1, x2, mask):
         for layer in self.layers:
-            x1, x2 = layer(x1, x2, mask)
+            x1, x2 = Reversible.apply(layer, x1, x2, mask)
         return x2
 
 class DecoderLayer(nn.Module):
@@ -24,8 +25,11 @@ class DecoderLayer(nn.Module):
         self.dropouts = nn.ModuleList([nn.Dropout(hp.model.dropout) for _ in range(2)])
 
     def forward(self, x1, x2, mask):
-        inter1 = self.self_attn(x2, x2, x2, mask)
-        y1 = x1 + self.dropouts[0](self.norm1(inter1))
-        inter2 = self.feed_forward(y1)
-        y2 = x2 + self.dropouts[1](self.norm2(inter2))
+        y1 = x1 + self.dropouts[0](self.norm1(self.self_attn(x2, x2, x2, mask)))
+        y2 = x2 + self.dropouts[1](self.norm2(self.feed_forward(y1)))
         return y1, y2
+
+    def reverse(self, y1, y2, mask):
+        x2 = y2 - self.dropouts[1](self.norm2(self.feed_forward(y1)))
+        x1 = y1 - self.dropouts[0](self.norm1(self.self_attn(x2, x2, x2, mask)))
+        return x1, x2

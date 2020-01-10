@@ -36,7 +36,7 @@ Implements [Reformer: The Efficient Transformer](https://openreview.net/forum?id
 - [x] Rewrite using [pytorch-lightning](https://github.com/williamFalcon/pytorch-lightning/) framework
 - [x] Implement Label Smoothing
 - [x] Implement LSH attention
-- [ ] Implement reversible layer
+- [x] Implement reversible layer
 - [ ] Implement various datasets
 - [ ] Implement sampling
 
