@@ -41,11 +41,14 @@ class MultiHeadedAttention(nn.Module):
 
         return self.linear_out(x)
 
-def look_back(x):
+def look_back(x, zeros=True):
     # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
     size = x.size()
     new_size = size[:1] + (1, ) + size[2:]
-    pad = torch.cat([torch.zeros(new_size, dtype=x.dtype).cuda(non_blocking=True), x], dim=1)
+    if zeros:
+        pad = torch.cat([x.new_zeros(new_size, dtype=x.dtype), x], dim=1)
+    else:
+        pad = torch.cat([x.new_empty(new_size).fill_(1e9).type_as(x), x], dim=1)
     # [batch * head, n_buckets // 2 + 1, bucket_length * 2, d_k, rounds]
     concat = torch.cat([pad[:, :-1], pad[:, 1:]], dim=2)
     # [batch * head, n_buckets // 2, bucket_length * 4, d_k, rounds]
@@ -66,7 +69,7 @@ def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
 
     hashes = localitysensitivehash(flattened_query[..., 0], d_k, n_buckets, rounds)
     # [batch * head, length, rounds]
-    hash_indices = torch.argsort(hashes, dim=1)
+    sorted_hashes, hash_indices = torch.sort(hashes, dim=1)
     # [batch * head, length, rounds]
     expanded_hash_indices = hash_indices[:, :, None, :].expand(-1, -1, d_k, -1)
     # [batch * head, length, d_k, rounds]
@@ -112,13 +115,11 @@ def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
     # [batch * head, length, bucket_length * 4, rounds]
     scores = scores - ~original_mask.detach() * 1e9
 
-    hashes = torch.gather(hashes, dim=1, index=hash_indices)
-    # [batch * head, length, rounds]
-    hashes = hashes.reshape(-1, n_buckets // 2, bucket_length * 2, rounds)
+    sorted_hashes = sorted_hashes.reshape(-1, n_buckets // 2, bucket_length * 2, rounds)
     # [batch * head, n_buckets // 2, bucket_length * 2, rounds]
-    key_hash = look_back(hashes)
+    key_hash = look_back(sorted_hashes, False)
     # [batch * head, n_buckets // 2, bucket_length * 4, rounds]
-    hash_equiv_mask = (hashes[..., None, :] == key_hash[..., None, :, :])
+    hash_equiv_mask = (sorted_hashes[..., None, :] == key_hash[..., None, :, :])
     # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
     hash_equiv_mask = hash_equiv_mask.flatten(1, 2)
     # [batch * head, length, bucket_length * 4, rounds]
@@ -126,22 +127,22 @@ def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
     # [batch * head, length, bucket_length * 4, rounds]
     scores = scores - ~hash_equiv_mask.detach() * 1e9
 
-    reshaped_mask_indices = original_indices.reshape(-1, n_buckets // 2, bucket_length * 2, rounds)
+    reshaped_mask_indices = hash_indices.reshape(-1, n_buckets // 2, bucket_length * 2, rounds)
     # [batch * head, n_buckets // 2, bucket_length * 2, rounds]
-    lookback_mask_indices = look_back(reshaped_mask_indices)
+    lookback_mask_indices = look_back(reshaped_mask_indices, False)
     # [batch * head, n_buckets // 2, bucket_length * 4, rounds]
     query_indices = reshaped_mask_indices
     # [batch * head, n_buckets // 2, bucket_length * 2, rounds]
     key_indices = lookback_mask_indices
     # [batch * head, n_buckets // 2, bucket_length * 4, rounds]
 
-    causal_mask = query_indices[..., None, :] > key_indices[..., None, :, :]
+    causal_mask = query_indices[..., None, :] < key_indices[..., None, :, :]
     # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
     causal_mask = causal_mask.flatten(1, 2)
     # [batch * head, length, bucket_length * 4, rounds]
     causal_mask = torch.gather(causal_mask, dim=1, index=score_indices)
     # [batch * head, length, bucket_length * 4, rounds]
-    scores = scores - ~causal_mask.detach() * 1e9
+    scores = scores - causal_mask.detach() * 1e9
 
     indice_equiv_mask = query_indices[..., None, :] == key_indices[..., None, :, :]
     # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]

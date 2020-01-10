@@ -12,7 +12,7 @@ Implements [Reformer: The Efficient Transformer](https://openreview.net/forum?id
 ### Datasets
 
 - Currently only the synthetic dataset described in the paper is implemented.
-- Various parameters are editable in `config\config.yaml` under `data:`.
+- Various parameters are editable in `config\synthetic.yaml` under `data:`.
 
 ### Running the code
 
@@ -34,6 +34,7 @@ Implements [Reformer: The Efficient Transformer](https://openreview.net/forum?id
 
 - [x] Implement general framework of Reformer
 - [x] Rewrite using [pytorch-lightning](https://github.com/williamFalcon/pytorch-lightning/) framework
+- [x] Implement Label Smoothing
 - [x] Implement LSH attention
 - [ ] Implement reversible layer
 - [ ] Implement various datasets

@@ -5,7 +5,8 @@ import pytorch_lightning as pl
 from torch import nn
 from model.decoder import Decoder
 from model.embedding import Embeddings, PositionalEncoding
-from datasets.dataloader import create_copy_dataloader
+from model.labelsmoothing import LabelSmoothing
+from datasets.dataloader import create_dataloader
 
 class Reformer(pl.LightningModule):
     def __init__(self, hp, args):
@@ -14,8 +15,8 @@ class Reformer(pl.LightningModule):
         self.embed = nn.Sequential(
             Embeddings(hp, args), PositionalEncoding(hp, args)
         )
-        self.proj = nn.Linear(hp.model.d_model, hp.model.vocab)
-        self.criterion = nn.CrossEntropyLoss()
+        self.proj = nn.Linear(hp.model.d_model, hp.data.vocab)
+        self.criterion = LabelSmoothing(hp.train.smoothing)
         self.hp = hp
         self.args = args
         self.hparams = self.merge_hp(hp, args)
@@ -40,20 +41,18 @@ class Reformer(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y, mask = batch
-        res = self.forward(x, mask).transpose(1, 2)
+        res = self.forward(x, mask)
         loss = self.criterion(res, y)
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
 
     def validation_step(self, batch, batch_idx):
         x, y, mask = batch
-        res = self.forward(x, mask).transpose(1, 2)
+        res = self.forward(x, mask)
         loss = self.criterion(res, y)
-        resmax = torch.argmax(res, dim=1, keepdim=True)
-        conf = torch.gather(F.softmax(res, dim=1), dim=1, index=resmax)
-        resmax = resmax.flatten()
-        tgt = y.flatten()
-        acc = (resmax == tgt).float().mean()
+        resmax = torch.argmax(res, dim=-1)
+        conf = F.softmax(res, dim=-1).max(dim=-1)[0]
+        acc = (resmax == y).float().mean()
         return {'val_loss': loss, 'val_acc': acc, 'val_confidence': conf}
 
     def validation_end(self, outputs):
@@ -66,13 +65,11 @@ class Reformer(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y, mask = batch
-        res = self.forward(x, mask).transpose(1, 2)
+        res = self.forward(x, mask)
         loss = self.criterion(res, y)
-        resmax = torch.argmax(res, dim=1, keepdim=True)
-        conf = torch.gather(F.softmax(res, dim=1), dim=1, index=resmax)
-        resmax = resmax.flatten()
-        tgt = y.flatten()
-        acc = (resmax == tgt).float().mean()
+        resmax = torch.argmax(res, dim=-1)
+        conf = F.softmax(res, dim=-1).max(dim=-1)[0]
+        acc = (resmax == y).float().mean()
         return {'test_loss': loss, 'test_acc': acc, 'test_confidence': conf}
 
     def test_end(self, outputs):
@@ -88,12 +85,12 @@ class Reformer(pl.LightningModule):
 
     @pl.data_loader
     def train_dataloader(self):
-        return create_copy_dataloader(self.hp, self.args, True)
+        return create_dataloader(self.hp, self.args, "train")
 
     @pl.data_loader
     def val_dataloader(self):
-        return create_copy_dataloader(self.hp, self.args, True)
+        return create_dataloader(self.hp, self.args, "val")
 
     @pl.data_loader
     def test_dataloader(self):
-        return create_copy_dataloader(self.hp, self.args, False)
+        return create_dataloader(self.hp, self.args, "test")

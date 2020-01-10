@@ -1,0 +1,29 @@
+model:
+  d_model: 256
+  head: 8
+  n_buckets: 64
+  rounds: 4
+  dropout: 0.1
+  N: 1
+  d_ff: 256
+---
+data:
+  name: "Synthetic"
+  path: None
+  dataset_length: 16384
+  max_data_length: 1024
+  data_length: 1024
+  vocab: 128
+---
+train:
+  num_workers: 4
+  accumulate: 8
+  lr: 0.001
+  smoothing: 0.1
+  epochs: 10000
+---
+log:
+  path: 'logs'
+---
+chkpt:
+  path: 'chkpts'

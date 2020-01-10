@@ -6,7 +6,7 @@ from torch import nn
 class Embeddings(nn.Module):
     def __init__(self, hp, args):
         super(Embeddings, self).__init__()
-        self.embed = nn.Embedding(hp.model.vocab, hp.model.d_model)
+        self.embed = nn.Embedding(hp.data.vocab, hp.model.d_model)
         self.d_model = hp.model.d_model
 
     def forward(self, x):
