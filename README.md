@@ -42,7 +42,7 @@ Implements [Reformer: The Efficient Transformer](https://openreview.net/forum?id
 
 ## Implementation Authors
 
-- [June Young Yi](<https://github.com/Rick-McCoy>)
+- [June Young Yi](<https://github.com/Rick-McCoy>) @ MINDsLab Inc. (julianyi1@snu.ac.kr, julianyi1@mindslab.ai)
 
 ## License
 
@@ -52,3 +52,4 @@ MIT License
 
 - The general structure of this code is based on [The Annotated Transformer](http://nlp.seas.harvard.edu/2018/04/03/attention.html), albeit heavily modified.
 - I am aware that [reformer-lm](https://github.com/zbloss/reformer_lm) exists. However, I was frustrated with the original [trax implementation](https://github.com/google/trax/blob/master/trax/models/research/reformer.py) that the authors provided, and decided to rewrite the entire thing from the ground up. Naturally, expect bugs everywhere.
+- Thanks to [MINDsLab](<https://mindslab.ai>) for providing training resources.

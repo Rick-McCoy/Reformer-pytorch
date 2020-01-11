@@ -41,7 +41,7 @@ class MultiHeadedAttention(nn.Module):
 
         return self.linear_out(x)
 
-def look_back(x, zeros=True):
+def look_back(x, zeros=True) -> torch.Tensor:
     # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
     size = x.size()
     new_size = size[:1] + (1, ) + size[2:]
@@ -55,10 +55,10 @@ def look_back(x, zeros=True):
     return concat
 
 def lshattention(query, value, rounds, n_buckets, mask, dropout):
-    head = query.size(1)
-    d_k = query.size(-1)
-    length = query.size(-2)
+    _, head, length, d_k = query.size()
     bucket_length = length // n_buckets
+
+    query = query / torch.norm(query, dim=-1, keepdim=True)
 
     flattened_query = query.flatten(0, 1)[..., None].expand(-1, -1, -1, rounds)
     # [batch * head, length, d_k, rounds]
@@ -77,9 +77,7 @@ def lshattention(query, value, rounds, n_buckets, mask, dropout):
     reordered_query = reordered_query.reshape(-1, n_buckets // 2, bucket_length * 2, d_k, rounds)
     # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
 
-    reordered_key = reordered_query / torch.norm(reordered_query, dim=-2, keepdim=True)
-    # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
-    lookback_key = look_back(reordered_key)
+    lookback_key = look_back(reordered_query)
     # [batch * head, n_buckets // 2, bucket_length * 4, d_k, rounds]
 
     scores = torch.einsum('...ijk,...ljk->...ilk', reordered_query, lookback_key) / math.sqrt(d_k)
@@ -103,9 +101,9 @@ def lshattention(query, value, rounds, n_buckets, mask, dropout):
 
     sorted_hashes = sorted_hashes.reshape(-1, n_buckets // 2, bucket_length * 2, rounds)
     # [batch * head, n_buckets // 2, bucket_length * 2, rounds]
-    key_hash = look_back(sorted_hashes, False)
+    lookback_hash = look_back(sorted_hashes, False)
     # [batch * head, n_buckets // 2, bucket_length * 4, rounds]
-    hash_equiv_mask = (sorted_hashes[..., None, :] == key_hash[..., None, :, :])
+    hash_equiv_mask = (sorted_hashes[..., None, :] == lookback_hash[..., None, :, :])
     # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
     hash_equiv_mask = hash_equiv_mask.flatten(1, 2)
     # [batch * head, length, bucket_length * 4, rounds]
