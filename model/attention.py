@@ -54,15 +54,13 @@ def look_back(x, zeros=True):
     # [batch * head, n_buckets // 2, bucket_length * 4, d_k, rounds]
     return concat
 
-def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
+def lshattention(query, value, rounds, n_buckets, mask, dropout):
     head = query.size(1)
     d_k = query.size(-1)
     length = query.size(-2)
     bucket_length = length // n_buckets
 
     flattened_query = query.flatten(0, 1)[..., None].expand(-1, -1, -1, rounds)
-    # [batch * head, length, d_k, rounds]
-    flattened_key = key.flatten(0, 1)[..., None].expand(-1, -1, -1, rounds)
     # [batch * head, length, d_k, rounds]
     flattened_value = value.flatten(0, 1)[..., None].expand(-1, -1, -1, rounds)
     # [batch * head, length, d_k, rounds]
@@ -79,24 +77,14 @@ def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
     reordered_query = reordered_query.reshape(-1, n_buckets // 2, bucket_length * 2, d_k, rounds)
     # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
 
-    reordered_key = torch.gather(flattened_key, dim=1, index=expanded_hash_indices)
-    # [batch * head, length, d_k, rounds]
-    reordered_key = reordered_key.reshape(-1, n_buckets // 2, bucket_length * 2, d_k, rounds)
+    reordered_key = reordered_query / torch.norm(reordered_query, dim=-2, keepdim=True)
     # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
-
     lookback_key = look_back(reordered_key)
     # [batch * head, n_buckets // 2, bucket_length * 4, d_k, rounds]
 
     scores = torch.einsum('...ijk,...ljk->...ilk', reordered_query, lookback_key) / math.sqrt(d_k)
-    # [batch * head, n_buckets, bucket_length * 2, bucket_length * 4, rounds]
+    # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
     scores = scores.flatten(1, 2)
-    # [batch * head, length, bucket_length * 4, rounds]
-
-    original_indices = torch.argsort(hash_indices, dim=1)
-    # [batch * head, length, rounds]
-    score_indices = original_indices[..., None, :].expand(-1, -1, bucket_length * 4, -1)
-    # [batch * head, length, bucket_length * 4, rounds]
-    scores = torch.gather(scores, dim=1, index=score_indices)
     # [batch * head, length, bucket_length * 4, rounds]
 
     mask = mask[:, None, :, None].expand(-1, head, -1, rounds).flatten(0, 1)
@@ -111,9 +99,7 @@ def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
     # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
     flattened_mask = reshaped_mask.flatten(1, 2)
     # [batch * head, length, bucket_length * 4, rounds]
-    original_mask = torch.gather(flattened_mask, dim=1, index=score_indices)
-    # [batch * head, length, bucket_length * 4, rounds]
-    scores = scores - ~original_mask.detach() * 1e9
+    scores = scores - ~flattened_mask.detach() * 1e9
 
     sorted_hashes = sorted_hashes.reshape(-1, n_buckets // 2, bucket_length * 2, rounds)
     # [batch * head, n_buckets // 2, bucket_length * 2, rounds]
@@ -123,24 +109,16 @@ def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
     # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
     hash_equiv_mask = hash_equiv_mask.flatten(1, 2)
     # [batch * head, length, bucket_length * 4, rounds]
-    hash_equiv_mask = torch.gather(hash_equiv_mask, dim=1, index=score_indices)
-    # [batch * head, length, bucket_length * 4, rounds]
     scores = scores - ~hash_equiv_mask.detach() * 1e9
 
-    reshaped_mask_indices = hash_indices.reshape(-1, n_buckets // 2, bucket_length * 2, rounds)
+    query_indices = hash_indices.reshape(-1, n_buckets // 2, bucket_length * 2, rounds)
     # [batch * head, n_buckets // 2, bucket_length * 2, rounds]
-    lookback_mask_indices = look_back(reshaped_mask_indices, False)
-    # [batch * head, n_buckets // 2, bucket_length * 4, rounds]
-    query_indices = reshaped_mask_indices
-    # [batch * head, n_buckets // 2, bucket_length * 2, rounds]
-    key_indices = lookback_mask_indices
+    key_indices = look_back(query_indices, False)
     # [batch * head, n_buckets // 2, bucket_length * 4, rounds]
 
     causal_mask = query_indices[..., None, :] < key_indices[..., None, :, :]
     # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
     causal_mask = causal_mask.flatten(1, 2)
-    # [batch * head, length, bucket_length * 4, rounds]
-    causal_mask = torch.gather(causal_mask, dim=1, index=score_indices)
     # [batch * head, length, bucket_length * 4, rounds]
     scores = scores - causal_mask.detach() * 1e9
 
@@ -148,9 +126,12 @@ def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
     # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
     indice_equiv_mask = indice_equiv_mask.flatten(1, 2)
     # [batch * head, length, bucket_length * 4, rounds]
-    indice_equiv_mask = torch.gather(indice_equiv_mask, dim=1, index=score_indices)
-    # [batch * head, length, bucket_length * 4, rounds]
     scores = scores - indice_equiv_mask.detach() * 1e5
+
+    original_indices = torch.argsort(hash_indices, dim=1)
+    # [batch * head, length, rounds]
+    score_indices = original_indices[..., None, :].expand(-1, -1, bucket_length * 4, -1)
+    # [batch * head, length, bucket_length * 4, rounds]
 
     expanded_key_indices = key_indices[..., None, :, :].expand(-1, -1, bucket_length * 2, -1, -1)
     # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
@@ -160,9 +141,10 @@ def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
     # [batch * head, length, bucket_length * 4, rounds]
     count_repeat_key = torch.zeros_like(reordered_key_indices)
     # [batch * head, length, bucket_length * 4, rounds]
-    for split_key_indices in torch.chunk(reordered_key_indices, chunks=bucket_length * 4, dim=-2):
+    for split_key_indices in torch.split(reordered_key_indices, split_size_or_sections=1, dim=-2):
         count_repeat_key += (reordered_key_indices[..., None] == split_key_indices[..., None, :]).sum(dim=-1)
     # [batch * head, length, bucket_length * 4, rounds]
+    scores = torch.gather(scores, dim=1, index=score_indices)
     scores = scores - count_repeat_key.float().log().detach()
 
     scores = scores.flatten(-2, -1)
@@ -170,8 +152,7 @@ def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
     p_attn = F.softmax(scores, dim=-1)
     # [batch * head, length, bucket_length * 4 * rounds]
 
-    if dropout is not None:
-        p_attn = dropout(p_attn)
+    p_attn = dropout(p_attn)
 
     reordered_value = torch.gather(flattened_value, dim=1, index=expanded_hash_indices)
     # [batch * head, length, d_k, rounds]
@@ -179,23 +160,25 @@ def lshattention(query, key, value, rounds, n_buckets, mask, dropout=None):
     # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
     lookback_value = look_back(reshaped_value)
     # [batch * head, n_buckets // 2, bucket_length * 4, d_k, rounds]
-    repeat_value = lookback_value[:, :, None, ...].expand(-1, -1, bucket_length * 2, -1, -1, -1)
-    # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, d_k, rounds]
-    repeat_value = repeat_value.flatten(1, 2)
-    # [batch * head, length, bucket_length * 4, d_k, rounds]
-    value_indices = score_indices[..., None, :].expand(-1, -1, -1, d_k, -1)
-    # [batch * head, length, bucket_length * 4, d_k, rounds]
-    original_value = torch.gather(repeat_value, dim=1, index=value_indices)
-    # [batch * head, length, bucket_length * 4, d_k, rounds]
-    original_value = original_value.transpose(-2, -1).flatten(-3, -2)
-    # [batch * head, length, bucket_length * 4 * rounds, d_k]
 
-    attention = torch.einsum('...i,...ij->...j', p_attn, original_value)
+    attn_indices = hash_indices[..., None, :].expand(-1, -1, bucket_length * 4, -1).flatten(-2, -1)
+    # [batch * head, length, bucket_length * 4 * rounds]
+    reordered_p_attn = torch.gather(p_attn, dim=1, index=attn_indices)
+    new_p_attn = reordered_p_attn.reshape(-1, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds)
+    # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
+
+    attention = torch.einsum('...ijl,...jkl->...ikl', new_p_attn, lookback_value)
+    # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
+    attention = attention.flatten(1, 2)
+    # [batch * head, length, d_k, rounds]
+    new_indices = original_indices[..., None, :].expand(-1, -1, d_k, -1)
+    # [batch * head, length, d_k, rounds]
+    attention = torch.gather(attention, dim=1, index=new_indices).sum(dim=-1)
     # [batch * head, length, d_k]
     attention = attention.reshape(-1, head, length, d_k)
     # [batch, head, length, d_k]
 
-    return attention, p_attn.reshape(-1, head, length, bucket_length * 4 * rounds)
+    return attention
 
 def localitysensitivehash(inp, d_k, n_buckets, rounds):
     rand_matrix = torch.rand([d_k, rounds, n_buckets // 2]).cuda(non_blocking=True)
@@ -211,25 +194,20 @@ class MultiRoundLSHAttention(nn.Module):
         self.n_buckets = hp.model.n_buckets
         self.rounds = hp.model.rounds
         self.linear_query = nn.Linear(hp.model.d_model, hp.model.d_model)
-        self.linear_key = nn.Linear(hp.model.d_model, hp.model.d_model)
         self.linear_value = nn.Linear(hp.model.d_model, hp.model.d_model)
         self.linear_out = nn.Linear(hp.model.d_model, hp.model.d_model)
-        self.attn = None
         self.dropout = nn.Dropout(p=hp.model.dropout)
     
-    def forward(self, query, key, value, mask):
+    def forward(self, query, value, mask):
         length = query.size(1)
 
         query = self.linear_query(query).reshape(-1, length, self.head, self.d_k).transpose(1 ,2)
         # [batch, head, length, d_k]
-        key = query / torch.norm(query, dim=-1, keepdim=True)
-        # [batch, head, length, d_k]
         value = self.linear_value(value).reshape(-1, length, self.head, self.d_k).transpose(1 ,2)
         # [batch, head, length, d_k]
 
-        x, self.attn = lshattention(
+        x = lshattention(
             query,
-            key,
             value,
             self.rounds,
             self.n_buckets,

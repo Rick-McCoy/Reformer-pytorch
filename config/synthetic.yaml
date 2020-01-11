@@ -1,19 +1,19 @@
 model:
-  d_model: 32
+  d_model: 256
   head: 8
-  n_buckets: 4
+  n_buckets: 64
   rounds: 4
   dropout: 0.1
   N: 1
-  d_ff: 32
+  d_ff: 256
 ---
 data:
   name: "Synthetic"
   path: None
-  dataset_length: 16384
-  max_data_length: 32
-  data_length: 32
-  vocab: 16
+  dataset_length: 2048
+  max_data_length: 1024
+  data_length: 1024
+  vocab: 128
 ---
 train:
   num_workers: 4
