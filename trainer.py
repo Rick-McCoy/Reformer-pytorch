@@ -1,4 +1,5 @@
 import yaml
+import torch
 import argparse
 import platform
 
@@ -47,7 +48,6 @@ if __name__ == '__main__':
         max_nb_epochs=hp.train.epochs,
         weights_summary='full'
     )
-
     trainer.fit(reformer)
 
     trainer.test(reformer)

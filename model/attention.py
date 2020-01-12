@@ -41,6 +41,12 @@ class MultiHeadedAttention(nn.Module):
 
         return self.linear_out(x)
 
+def get_count(x, y):
+    count = torch.zeros_like(x)
+    for split in torch.split(x, split_size_or_sections=1, dim=-1):
+        count += (y == split)
+    return count.squeeze(-1)
+
 def look_back(x, zeros=True) -> torch.Tensor:
     # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
     size = x.size()
@@ -137,10 +143,15 @@ def lshattention(query, value, rounds, n_buckets, mask, dropout):
     # [batch * head, length, bucket_length * 4, rounds]
     reordered_key_indices = torch.gather(flattened_key_indices, dim=1, index=score_indices)
     # [batch * head, length, bucket_length * 4, rounds]
-    count_repeat_key = torch.zeros_like(reordered_key_indices)
+    count_repeat_key = torch.ones_like(reordered_key_indices)
     # [batch * head, length, bucket_length * 4, rounds]
-    for split_key_indices in torch.split(reordered_key_indices, split_size_or_sections=1, dim=-2):
-        count_repeat_key += (reordered_key_indices[..., None] == split_key_indices[..., None, :]).sum(dim=-1)
+    for i, i1 in enumerate(torch.split(reordered_key_indices[..., :-1], split_size_or_sections=1, dim=-1)):
+        for j, i2 in enumerate(torch.split(reordered_key_indices[..., i + 1:], split_size_or_sections=1, dim=-1)):
+            comp = get_count(i1, i2)
+            count_repeat_key[..., i] += comp
+            count_repeat_key[..., j] += comp
+    # for split_key_indices in torch.split(reordered_key_indices, split_size_or_sections=1, dim=-2):
+    #     count_repeat_key += (reordered_key_indices[..., None] == split_key_indices[..., None, :]).sum(dim=-1)
     # [batch * head, length, bucket_length * 4, rounds]
     scores = torch.gather(scores, dim=1, index=score_indices)
     scores = scores - count_repeat_key.float().log().detach()

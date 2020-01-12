@@ -27,8 +27,10 @@ class Reversible(Function):
         x1, x2 = ctx.function.reverse(y1, y2, mask)
         Reversible.outputs = (x1, x2)
         with torch.enable_grad():
-            x1.requires_grad = True
-            x2.requires_grad = True
+            if not x1.requires_grad:
+                x1.requires_grad = True
+            if not x2.requires_grad:
+                x2.requires_grad = True
             y1, y2 = ctx.function(x1, x2, mask)
         grad = torch.autograd.grad(outputs=(y1, y2), inputs=(x1, x2), grad_outputs=grad_outputs)
         return (None, *grad, None)
