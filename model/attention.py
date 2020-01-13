@@ -66,19 +66,19 @@ def lshattention(query, value, rounds, n_buckets, mask, dropout):
 
     query = query / torch.norm(query, dim=-1, keepdim=True)
 
-    flattened_query = query.flatten(0, 1)[..., None].expand(-1, -1, -1, rounds)
-    # [batch * head, length, d_k, rounds]
-    flattened_value = value.flatten(0, 1)[..., None].expand(-1, -1, -1, rounds)
-    # [batch * head, length, d_k, rounds]
+    flattened_query = query.flatten(0, 1)
+    # [batch * head, length, d_k]
 
-    hashes = localitysensitivehash(flattened_query[..., 0], d_k, n_buckets, rounds)
+    hashes = localitysensitivehash(flattened_query, d_k, n_buckets, rounds)
     # [batch * head, length, rounds]
     sorted_hashes, hash_indices = torch.sort(hashes, dim=1)
     # [batch * head, length, rounds]
     expanded_hash_indices = hash_indices[:, :, None, :].expand(-1, -1, d_k, -1)
     # [batch * head, length, d_k, rounds]
 
-    reordered_query = torch.gather(flattened_query, dim=1, index=expanded_hash_indices)
+    expanded_query = flattened_query[..., None].expand(-1, -1, -1, rounds)
+    # [batch * head, length, d_k, rounds]
+    reordered_query = torch.gather(expanded_query, dim=1, index=expanded_hash_indices)
     # [batch * head, length, d_k, rounds]
     reordered_query = reordered_query.reshape(-1, n_buckets // 2, bucket_length * 2, d_k, rounds)
     # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
@@ -163,6 +163,8 @@ def lshattention(query, value, rounds, n_buckets, mask, dropout):
 
     p_attn = dropout(p_attn)
 
+    flattened_value = value.flatten(0, 1)[..., None].expand(-1, -1, -1, rounds)
+    # [batch * head, length, d_k, rounds]
     reordered_value = torch.gather(flattened_value, dim=1, index=expanded_hash_indices)
     # [batch * head, length, d_k, rounds]
     reshaped_value = reordered_value.reshape(-1, n_buckets // 2, bucket_length * 2, d_k, rounds)
@@ -190,10 +192,15 @@ def lshattention(query, value, rounds, n_buckets, mask, dropout):
     return attention
 
 def localitysensitivehash(inp, d_k, n_buckets, rounds):
+    # [batch * head, length, d_k]
     rand_matrix = torch.rand([d_k, rounds, n_buckets // 2]).cuda(non_blocking=True)
+    # [d_k, rounds, n_buckets // 2]
     rand_matrix = rand_matrix / torch.norm(rand_matrix, dim=-1, keepdim=True)
+    # [d_k, rounds, n_buckets // 2]
     x = torch.einsum('...i,ijk->...jk', inp, rand_matrix)
+    # [batch * head, length, rounds, n_buckets // 2]
     return torch.argmax(torch.cat([x, -x], dim=-1), dim=-1)
+    # [batch * head, length, rounds]
 
 class MultiRoundLSHAttention(nn.Module):
     def __init__(self, hp, args):
