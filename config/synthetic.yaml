@@ -8,7 +8,7 @@ model:
   d_ff: 256
 ---
 data:
-  name: "Synthetic"
+  name: "synthetic"
   path: None
   dataset_length: 2048
   max_data_length: 1024
@@ -16,14 +16,14 @@ data:
   vocab: 128
 ---
 train:
-  num_workers: 4
-  accumulate: 8
+  num_workers: 16
+  accumulate: 1
   lr: 0.001
   smoothing: 0.1
   epochs: 10000
 ---
 log:
-  path: 'logs'
+  path: '/DATA1/julian/logs'
 ---
 chkpt:
   path: 'chkpts'

@@ -8,50 +8,43 @@ from model.reversible import Reversible
 class Decoder(nn.Module):
     def __init__(self, hp, args):
         super(Decoder, self).__init__()
-        self.layers = nn.ModuleList([DecoderLayer(hp, args) for _ in range(hp.model.N)])
+        self.layers = nn.ModuleList([ReversibleDecoderLayer(hp, args) for _ in range(hp.model.N)])
     
     def forward(self, x1, x2, mask):
         for layer in self.layers:
+            # x1, x2 = Reversible().apply(layer, x1, x2, mask)
             x1, x2 = layer(x1, x2, mask)
         return x2
 
-class DecoderLayer(nn.Module):
+class ReversibleDecoderLayer(nn.Module):
     def __init__(self, hp, args):
-        super(DecoderLayer, self).__init__()
-        self.attn = ReversibleAttention(hp, args)
-        self.feed_forward = ReversibleFeedforward(hp, args)
-
-    def forward(self, x1, x2, mask):
-        y1, x2 = Reversible().apply(self.attn, x1, x2, mask)
-        y1, y2 = Reversible().apply(self.feed_forward, y1, x2, mask)
-        return y1, y2
-
-class ReversibleAttention(nn.Module):
-    def __init__(self, hp, args):
-        super(ReversibleAttention, self).__init__()
-        self.self_attn = MultiRoundLSHAttention(hp, args)
-        self.norm = nn.LayerNorm(hp.model.d_model)
-        self.dropout = nn.Dropout(hp.model.dropout)
+        super(ReversibleDecoderLayer, self).__init__()
+        self.f_block = AttentionBlock(hp, args)
+        self.g_block = FeedForwardBlock(hp, args)
     
     def forward(self, x1, x2, mask):
-        y1 = x1 + self.dropout(self.norm(self.self_attn(x2, x2, mask)))
-        return y1, x2
+        y1 = x1 + self.f_block(x2, mask)
+        y2 = x2 + self.g_block(y1)
+        return y1, y2
 
-    def reverse(self, y1, x2, mask):
-        x1 = y1 - self.dropout(self.norm(self.self_attn(x2, x2, mask)))
-        return x1, x2
-
-class ReversibleFeedforward(nn.Module):
+class AttentionBlock(nn.Module):
     def __init__(self, hp, args):
-        super(ReversibleFeedforward, self).__init__()
+        super(AttentionBlock, self).__init__()
+        self.attn = MultiRoundLSHAttention(hp, args)
+        self.norm = nn.LayerNorm(hp.model.d_model)
+        self.dropout = nn.Dropout(hp.model.dropout)
+
+    def forward(self, x, mask):
+        norm = self.norm(x)
+        return self.dropout(self.attn(norm, norm, mask))
+
+class FeedForwardBlock(nn.Module):
+    def __init__(self, hp, args):
+        super(FeedForwardBlock, self).__init__()
         self.feed_forward = ChunkFeedForward(hp, args)
         self.norm = nn.LayerNorm(hp.model.d_model)
         self.dropout = nn.Dropout(hp.model.dropout)
 
-    def forward(self, y1, x2, mask):
-        y2 = x2 + self.dropout(self.norm(self.feed_forward(y1)))
-        return y1, y2
-
-    def reverse(self, y1, y2, mask):
-        x2 = y2 - self.dropout(self.norm(self.feed_forward(y1)))
-        return y1, x2
+    def forward(self, x):
+        norm = self.norm(x)
+        return self.dropout(self.feed_forward(norm))

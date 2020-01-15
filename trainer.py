@@ -48,7 +48,9 @@ if __name__ == '__main__':
         max_nb_epochs=hp.train.epochs,
         weights_summary='full'
     )
-
-    trainer.fit(reformer)
-
-    trainer.test(reformer)
+    with torch.autograd.profiler.profile(enabled=args.fast_dev_run, use_cuda=True) as prof:
+        trainer.fit(reformer)
+        trainer.test(reformer)
+    
+    if args.fast_dev_run:
+        prof.export_chrome_trace('traces/trace_' + str(logger.version) + '.json')

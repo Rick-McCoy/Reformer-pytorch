@@ -4,7 +4,7 @@ import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
 def create_dataloader(hp, args, mode):
-    if hp.data.name == "Synthetic":
+    if hp.data.name == "synthetic":
         return DataLoader(
             CopyDataSet(hp, args, mode),
             batch_size=args.batch_size,
