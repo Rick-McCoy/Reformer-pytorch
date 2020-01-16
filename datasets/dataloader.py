@@ -2,6 +2,7 @@ import torch
 import numpy as np
 
 from torch.utils.data import DataLoader, Dataset
+from utils.utils import init_fn
 
 def create_dataloader(hp, args, mode):
     if hp.data.name == "synthetic":
@@ -11,7 +12,8 @@ def create_dataloader(hp, args, mode):
             shuffle=(mode == "train"),
             num_workers=hp.train.num_workers,
             pin_memory=True,
-            drop_last=True
+            drop_last=True,
+            worker_init_fn=init_fn
         )
     else:
         raise NotImplementedError

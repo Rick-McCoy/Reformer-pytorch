@@ -9,11 +9,11 @@ def look_back(x, zeros=True) -> torch.Tensor:
     size = x.size()
     new_size = size[:1] + (1, ) + size[2:]
     if zeros:
-        pad = torch.cat([x.new_zeros(new_size, dtype=x.dtype), x], dim=1)
+        pad = torch.cat([x.new_zeros(new_size, dtype=x.dtype), x[:, :-1]], dim=1)
     else:
-        pad = torch.cat([x.new_full(new_size, fill_value=1e9), x], dim=1)
+        pad = torch.cat([x.new_full(new_size, fill_value=1e9), x[:, :-1]], dim=1)
     # [batch * head, n_buckets // 2 + 1, bucket_length * 2, d_k, rounds]
-    concat = torch.cat([pad[:, :-1], pad[:, 1:]], dim=2)
+    concat = torch.cat([pad, x], dim=2)
     # [batch * head, n_buckets // 2, bucket_length * 4, d_k, rounds]
     return concat
 
