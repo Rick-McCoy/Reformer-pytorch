@@ -21,7 +21,7 @@ class ReversibleDecoderLayer(nn.Module):
         super(ReversibleDecoderLayer, self).__init__()
         self.f_block = AttentionBlock(hp, args)
         self.g_block = FeedForwardBlock(hp, args)
-    
+
     def forward(self, x1, x2, mask):
         y1 = x1 + self.f_block(x2, mask)
         y2 = x2 + self.g_block(y1)

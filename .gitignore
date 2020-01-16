@@ -129,6 +129,8 @@ dmypy.json
 .pyre/
 
 # User defined
-
 logs/
 traces/
+
+# VSCode
+.vscode

@@ -27,7 +27,7 @@ class ChunkFeedForward(nn.Module):
         # [batch, length, d_model]
         x = x.reshape(-1, x.size(1) // self.chunk, x.size(2))
         # [batch * chunk, length // chunk, d_model]
-        output = F.relu(self.linear1(x))
+        output = F.gelu(self.linear1(x))
         # [batch * chunk, length // chunk, d_ff]
         output = self.linear2(self.dropout(output))
         # [batch * chunk, length // chunk, d_model]
