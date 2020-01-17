@@ -22,12 +22,12 @@ class Reformer(pl.LightningModule):
         self.hparams = self.merge_hp(hp, args)
 
     def merge_hp(self, hp, args):
-        for k, v in hp.model.items():
-            setattr(args, k, v)
-        for k, v in hp.data.items():
-            setattr(args, k, v)
-        for k, v in hp.train.items():
-            setattr(args, k, v)
+        for key, value in hp.model.items():
+            setattr(args, key, value)
+        for key, value in hp.data.items():
+            setattr(args, key, value)
+        for key, value in hp.train.items():
+            setattr(args, key, value)
         return args
 
     def forward(self, x, mask):

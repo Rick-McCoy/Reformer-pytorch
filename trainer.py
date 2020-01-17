@@ -1,4 +1,3 @@
-import yaml
 import torch
 import argparse
 import platform

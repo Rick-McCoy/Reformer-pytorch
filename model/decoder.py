@@ -1,9 +1,7 @@
-import torch
-
 from torch import nn
 from model.feedforward import ChunkFeedForward
 from model.attention import MultiRoundLSHAttention
-from model.reversible import Reversible
+# from model.reversible import Reversible
 
 class Decoder(nn.Module):
     def __init__(self, hp, args):
