@@ -23,7 +23,7 @@ train:
   epochs: 10000
 ---
 log:
-  path: '/DATA1/julian/logs'
+  path: 'logs'
 ---
 chkpt:
   path: 'chkpts'

@@ -24,13 +24,14 @@ def reverse_sort(x: torch.Tensor, dim: int) -> torch.Tensor:
     new_indices.scatter_(dim=dim, index=x, src=arange)
     return new_indices
 
-def localitysensitivehash(inp, d_k, n_buckets, rounds) -> torch.Tensor:
+def localitysensitivehash(inp: torch.Tensor, n_buckets, rounds) -> torch.Tensor:
+    batch_size, _, d_k = inp.size()
     # [batch * head, length, d_k]
-    rand_matrix = torch.rand([d_k, rounds, n_buckets // 2]).cuda(non_blocking=True)
-    # [d_k, rounds, n_buckets // 2]
-    rand_matrix = rand_matrix / torch.norm(rand_matrix, dim=0, keepdim=True)
-    # [d_k, rounds, n_buckets // 2]
-    x = torch.einsum('...i,ijk->...jk', inp, rand_matrix)
+    rand_matrix = inp.new_empty([batch_size, d_k, rounds, n_buckets // 2]).normal_()
+    # [batch * head, d_k, rounds, n_buckets // 2]
+    rand_matrix = rand_matrix / torch.norm(rand_matrix, dim=1, keepdim=True)
+    # [batch * head, d_k, rounds, n_buckets // 2]
+    x = torch.einsum('...ij,...jkl->...ikl', inp, rand_matrix)
     # [batch * head, length, rounds, n_buckets // 2]
     return torch.argmax(torch.cat([x, -x], dim=-1), dim=-1)
     # [batch * head, length, rounds]
@@ -45,7 +46,7 @@ def lshattention(query: torch.Tensor, value: torch.Tensor, rounds, n_buckets, ma
     flattened_query = query.flatten(0, 1)
     # [batch * head, length, d_k]
 
-    hashes = localitysensitivehash(flattened_query, d_k, n_buckets, rounds)
+    hashes = localitysensitivehash(flattened_query, n_buckets, rounds)
     # [batch * head, length, rounds]
     sorted_hashes, hash_indices = torch.sort(hashes, dim=1)
     # [batch * head, length, rounds]

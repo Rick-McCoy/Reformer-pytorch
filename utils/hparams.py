@@ -41,27 +41,39 @@ class Dotdict(dict):
     set attributes: d.val2 = 'second' or d['val2'] = 'second'
     get attributes: d.val2 or d['val2']
     """
-    __getattr__ = dict.__getitem__
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
     def __init__(self, dct=None):
+        super(Dotdict, self).__init__()
         dct = dict() if not dct else dct
         for key, value in dct.items():
             if hasattr(value, 'keys'):
                 value = Dotdict(value)
             self[key] = value
+    
+    def __getattr__(self, item):
+        try:
+            return self.__getitem__(item)
+        except KeyError:
+            raise AttributeError(item)
 
 
 class HParam(Dotdict):
 
     def __init__(self, file):
-        super(Dotdict, self).__init__()
+        super(HParam, self).__init__()
         hp_dict = load_hparam(file)
         hp_dotdict = Dotdict(hp_dict)
         for k, v in hp_dotdict.items():
             setattr(self, k, v)
-            
-    __getattr__ = Dotdict.__getitem__
+
+    def __getattr__(self, item):
+        try:
+            return self.__getitem__(item)
+        except KeyError:
+            raise AttributeError(item)
+
+    # __getattr__ = Dotdict.__getitem__
     __setattr__ = Dotdict.__setitem__
     __delattr__ = Dotdict.__delitem__
