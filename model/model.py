@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 
 from torch import nn
+from utils.utils import merge_hp
 from model.decoder import Decoder
 from model.embedding import Embeddings, PositionalEncoding
 from model.labelsmoothing import LabelSmoothing
@@ -19,25 +20,12 @@ class Reformer(pl.LightningModule):
         self.criterion = LabelSmoothing(hp.train.smoothing)
         self.hp = hp
         self.args = args
-        self.hparams = self.merge_hp(hp, args)
-
-    def merge_hp(self, hp, args):
-        for key, value in hp.model.items():
-            setattr(args, key, value)
-        for key, value in hp.data.items():
-            setattr(args, key, value)
-        for key, value in hp.train.items():
-            setattr(args, key, value)
-        return args
+        self.hparams = merge_hp(hp, args)
 
     def forward(self, x, mask):
-        inter = self.decode(x, mask)
-        output = self.proj(inter)
-        return output
-
-    def decode(self, x, mask):
         embed = self.embed(x)
-        return self.decoder(embed, embed, mask)
+        output = self.proj(self.decoder(embed, embed, mask))
+        return output
 
     def training_step(self, batch, batch_idx):
         x, y, mask = batch

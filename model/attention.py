@@ -176,13 +176,13 @@ class MultiRoundLSHAttention(nn.Module):
         self.linear_value = nn.Linear(hp.model.d_model, hp.model.d_model)
         self.linear_out = nn.Linear(hp.model.d_model, hp.model.d_model)
         self.dropout = nn.Dropout(p=hp.model.dropout)
-    
+
     def forward(self, query, value, mask):
         length = query.size(1)
 
-        query = self.linear_query(query).reshape(-1, length, self.head, self.d_k).transpose(1 ,2)
+        query = self.linear_query(query).reshape(-1, length, self.head, self.d_k).transpose(1, 2)
         # [batch, head, length, d_k]
-        value = self.linear_value(value).reshape(-1, length, self.head, self.d_k).transpose(1 ,2)
+        value = self.linear_value(value).reshape(-1, length, self.head, self.d_k).transpose(1, 2)
         # [batch, head, length, d_k]
 
         x = lshattention(

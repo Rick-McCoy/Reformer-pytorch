@@ -1,6 +1,6 @@
-import torch
 import argparse
 import platform
+import torch
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.logging import TestTubeLogger
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     trainer = Trainer(
         logger=logger,
         default_save_path=hp.log.path,
-        # distributed_backend='ddp',
+        distributed_backend=None if platform.system() == 'Windows' else 'ddp',
         fast_dev_run=args.fast_dev_run,
         gpus=1,
         accumulate_grad_batches=hp.train.accumulate,

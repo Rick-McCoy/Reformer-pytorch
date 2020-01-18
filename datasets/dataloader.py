@@ -29,7 +29,7 @@ class CopyDataSet(Dataset):
 
     def __len__(self):
         return self.dataset_length
-    
+
     def __getitem__(self, idx):
         src = torch.from_numpy(np.random.randint(1, self.vocab, size=(self.max_data_length // 2))).long()
         src[0] = 0

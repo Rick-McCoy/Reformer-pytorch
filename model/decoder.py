@@ -7,7 +7,7 @@ class Decoder(nn.Module):
     def __init__(self, hp, args):
         super(Decoder, self).__init__()
         self.layers = nn.ModuleList([ReversibleDecoderLayer(hp, args) for _ in range(hp.model.N)])
-    
+
     def forward(self, x1, x2, mask):
         for layer in self.layers:
             # x1, x2 = Reversible().apply(layer, x1, x2, mask)

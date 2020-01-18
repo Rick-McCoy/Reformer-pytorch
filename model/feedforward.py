@@ -1,19 +1,6 @@
-import torch
 import torch.nn.functional as F
 
 from torch import nn
-
-class Feedforward(nn.Module):
-    def __init__(self, d_model, d_ff, dropout=0.1):
-        super(Feedforward, self).__init__()
-        self.linear1 = nn.Linear(d_model, d_ff)
-        self.linear2 = nn.Linear(d_ff, d_model)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x):
-        inter1 = F.relu(self.linear1(x))
-        inter2 = self.linear2(self.dropout(x))
-        return inter2
 
 class ChunkFeedForward(nn.Module):
     def __init__(self, hp, args):
