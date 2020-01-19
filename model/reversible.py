@@ -36,7 +36,7 @@ class Reversible(Function):
 
         with torch.enable_grad():
             x2.requires_grad = True
-            fx2 = ctx.layer.f_block(x2, mask)
+            fx2 = ctx.layer.f_block(x2, mask, False)
             fx2.backward(x1_grad)
         
         with torch.no_grad():

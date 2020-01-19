@@ -24,6 +24,3 @@ train:
 ---
 log:
   path: 'logs'
----
-chkpt:
-  path: 'chkpts'

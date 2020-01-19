@@ -32,9 +32,9 @@ class AttentionBlock(nn.Module):
         self.norm = nn.LayerNorm(hp.model.d_model)
         self.dropout = nn.Dropout(hp.model.dropout)
 
-    def forward(self, x, mask):
+    def forward(self, x, mask, random=True):
         norm = self.norm(x)
-        return self.dropout(self.attn(norm, norm, mask))
+        return self.dropout(self.attn(norm, norm, mask, random))
 
 class FeedForwardBlock(nn.Module):
     def __init__(self, hp, args):
