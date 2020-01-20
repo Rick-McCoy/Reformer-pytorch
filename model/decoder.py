@@ -44,7 +44,7 @@ class AttentionBlock(nn.Module):
         if self.training:
             generator = torch.Generator(device=attn.get_device())
             generator.manual_seed(seed)
-            mask = torch.bernoulli(attn, p=self.dropout, generator=generator)
+            mask = torch.bernoulli(attn, p=1 - self.dropout, generator=generator)
             return mask * attn / (1 - self.dropout)
 
         return attn
@@ -63,7 +63,7 @@ class FeedForwardBlock(nn.Module):
         if self.training:
             generator = torch.Generator(device=feed_forward.get_device())
             generator.manual_seed(seed)
-            mask = torch.bernoulli(feed_forward, p=self.dropout, generator=generator)
+            mask = torch.bernoulli(feed_forward, p=1 - self.dropout, generator=generator)
             return mask * feed_forward / (1 - self.dropout)
 
         return feed_forward
