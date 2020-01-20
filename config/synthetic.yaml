@@ -16,11 +16,11 @@ data:
   vocab: 128
 ---
 train:
-  num_workers: 16
+  num_workers: 8
   accumulate: 1
   lr: 0.001
   smoothing: 0.1
-  epochs: 10000
+  epochs: 100000000
 ---
 log:
   path: 'logs'

@@ -16,9 +16,12 @@ Implements [Reformer: The Efficient Transformer](https://openreview.net/forum?id
 
 ### Running the code
 
-- `python3 trainer.py -c \path\to\config\yaml -n [name of run] -b [batch size] -f [fast dev run] -v [resume version number]`
+- `python3 trainer.py -c \path\to\config\yaml -n [name of run] -b [batch size] -f [fast dev run] -v [version number]`
 - The `-f` flag is used for debugging; only one batch of training, validation, and testing will be calculated.
 - The `-v` flag is used for resuming from checkpoints; leave empty for new version.
+- A toy copy task of length 32, vocab 128 converges around ~6k steps using a batch size of 1024, learning rate of 1e-3 and Adam. The checkpoint is located under `checkpoints/`.
+
+![Validation accuracy](assets/Validation_accuracy_tensorboard.png)
 
 ## How to sample
 
