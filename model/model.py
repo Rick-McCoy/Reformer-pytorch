@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 
 from torch import nn
+from pytorch_lightning.pt_overrides.override_data_parallel import LightningDistributedDataParallel
 from utils.utils import merge_hp
 from model.decoder import Decoder
 from model.embedding import Embeddings, PositionalEncoding
@@ -70,6 +71,13 @@ class Reformer(pl.LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.hp.train.lr)
+
+    def configure_ddp(self, model, device_ids):
+        return LightningDistributedDataParallel(
+            model,
+            device_ids=device_ids,
+            find_unused_parameters=False
+        )
 
     @pl.data_loader
     def train_dataloader(self):

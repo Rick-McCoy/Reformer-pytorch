@@ -131,6 +131,7 @@ dmypy.json
 # User defined
 logs/
 traces/
+test.py
 
 # VSCode
 .vscode

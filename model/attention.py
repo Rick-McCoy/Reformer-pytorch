@@ -4,16 +4,10 @@ import torch.nn.functional as F
 
 from torch import nn
 
-def look_back(x, zeros=True) -> torch.Tensor:
+def look_back(x) -> torch.Tensor:
+    shift = torch.cat([x[:, -1:], x[:, :-1]], dim=1)
     # [batch * head, n_buckets // 2, bucket_length * 2, d_k, rounds]
-    size = x.size()
-    new_size = size[:1] + (1, ) + size[2:]
-    if zeros:
-        pad = torch.cat([x.new_zeros(new_size, dtype=x.dtype), x[:, :-1]], dim=1)
-    else:
-        pad = torch.cat([x.new_full(new_size, fill_value=1e9), x[:, :-1]], dim=1)
-    # [batch * head, n_buckets // 2 + 1, bucket_length * 2, d_k, rounds]
-    concat = torch.cat([pad, x], dim=2)
+    concat = torch.cat([shift, x], dim=2)
     # [batch * head, n_buckets // 2, bucket_length * 4, d_k, rounds]
     return concat
 
@@ -34,7 +28,7 @@ class LocalitySensitiveHash(nn.Module):
     def forward(self, inp: torch.Tensor, random=True):
         batch_size = inp.size(0)
         if random:
-            self.rand_matrix = inp.new_empty([batch_size, self.d_k, self.rounds, self.n_buckets // 2]).normal_()
+            self.rand_matrix = torch.randn([batch_size, self.d_k, self.rounds, self.n_buckets // 2], device=inp.get_device())
             # [batch * head, d_k, rounds, n_buckets // 2]
             self.rand_matrix /= torch.norm(self.rand_matrix, dim=1, keepdim=True)
             # [batch * head, d_k, rounds, n_buckets // 2]
@@ -93,7 +87,7 @@ class LSHAttention(nn.Module):
 
         sorted_hashes = sorted_hashes.reshape(-1, self.n_buckets // 2, bucket_length * 2, self.rounds)
         # [batch * head, n_buckets // 2, bucket_length * 2, rounds]
-        lookback_hash = look_back(sorted_hashes, False)
+        lookback_hash = look_back(sorted_hashes)
         # [batch * head, n_buckets // 2, bucket_length * 4, rounds]
         hash_equiv_mask = (sorted_hashes[..., None, :] != lookback_hash[..., None, :, :])
         # [batch * head, n_buckets // 2, bucket_length * 2, bucket_length * 4, rounds]
@@ -101,7 +95,7 @@ class LSHAttention(nn.Module):
 
         query_indices = hash_indices.reshape(-1, self.n_buckets // 2, bucket_length * 2, self.rounds)
         # [batch * head, n_buckets // 2, bucket_length * 2, rounds]
-        key_indices = look_back(query_indices, False)
+        key_indices = look_back(query_indices)
         # [batch * head, n_buckets // 2, bucket_length * 4, rounds]
 
         causal_mask = query_indices[..., None, :] < key_indices[..., None, :, :]
