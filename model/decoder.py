@@ -39,7 +39,7 @@ class AttentionBlock(nn.Module):
 
     def forward(self, x, mask, seed, random=True):
         norm = self.norm(x)
-        attn = self.attn(norm, norm, mask, random)
+        attn = self.attn(norm, norm, mask, (1 << 63) - seed, random)
 
         if self.training:
             generator = torch.Generator(device=attn.get_device())
@@ -58,7 +58,7 @@ class FeedForwardBlock(nn.Module):
 
     def forward(self, x, seed):
         norm = self.norm(x)
-        feed_forward = self.feed_forward(norm)
+        feed_forward = self.feed_forward(norm, (1 << 63) - seed)
 
         if self.training:
             generator = torch.Generator(device=feed_forward.get_device())

@@ -42,11 +42,11 @@ class LSHAttention(nn.Module):
         self.head = hp.model.head
         self.d_k = hp.model.d_model // hp.model.head
         self.rounds = hp.model.rounds
-        self.dropout = nn.Dropout(p=hp.model.dropout)
+        self.dropout = hp.model.dropout
         self.n_buckets = hp.model.n_buckets
         self.lsh = LocalitySensitiveHash(hp, args)
 
-    def forward(self, query: torch.Tensor, value: torch.Tensor, mask: torch.Tensor, random=True):
+    def forward(self, query: torch.Tensor, value: torch.Tensor, mask: torch.Tensor, seed: int, random=True):
         length = query.size(2)
         bucket_length = length // self.n_buckets
 
@@ -142,7 +142,13 @@ class LSHAttention(nn.Module):
         p_attn = F.softmax(scores, dim=-1)
         # [batch * head, length, bucket_length * 4 * rounds]
 
-        p_attn = self.dropout(p_attn).reshape(-1, length, bucket_length * 4, self.rounds)
+        if self.training:
+            generator = torch.Generator(device=p_attn.get_device())
+            generator.manual_seed(seed)
+            dropout_mask = torch.bernoulli(p_attn, p=1 - self.dropout, generator=generator)
+            p_attn = dropout_mask * p_attn / (1 - self.dropout)
+
+        p_attn = p_attn.reshape(-1, length, bucket_length * 4, self.rounds)
         # [batch * head, length, bucket_length * 4, rounds]
 
         flattened_value = value.flatten(0, 1)[..., None].expand(-1, -1, -1, self.rounds)
@@ -185,9 +191,8 @@ class MultiRoundLSHAttention(nn.Module):
         self.linear_value = nn.Linear(hp.model.d_model, hp.model.d_model)
         self.linear_out = nn.Linear(hp.model.d_model, hp.model.d_model)
         self.lshattention = LSHAttention(hp, args)
-        self.dropout = nn.Dropout(p=hp.model.dropout)
 
-    def forward(self, query, value, mask, random=True):
+    def forward(self, query, value, mask, seed, random=True):
         length = query.size(1)
 
         query = self.linear_query(query).reshape(-1, length, self.head, self.d_k).transpose(1, 2)
@@ -195,7 +200,7 @@ class MultiRoundLSHAttention(nn.Module):
         value = self.linear_value(value).reshape(-1, length, self.head, self.d_k).transpose(1, 2)
         # [batch, head, length, d_k]
 
-        x = self.lshattention(query, value, mask, random)
+        x = self.lshattention(query, value, mask, seed, random)
         # [batch, head, length, d_k]
 
         x = x.transpose(1, 2).flatten(-2, -1)
