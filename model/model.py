@@ -1,14 +1,20 @@
+'''
+Implements Reformer
+'''
+import os
+import time
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
 from torch import nn
-from pytorch_lightning.pt_overrides.override_data_parallel import LightningDistributedDataParallel
+from pytorch_lightning.overrides.override_data_parallel import LightningDistributedDataParallel
 from utils.utils import merge_hp
 from model.decoder import Decoder
 from model.embedding import Embeddings, PositionalEncoding
 from model.labelsmoothing import LabelSmoothing
-from datasets.dataloader import create_dataloader
+from datasets.dataloader import Dataloaders
+from datasets.music import roll_to_midi
 
 class Reformer(pl.LightningModule):
     def __init__(self, hp, args):
@@ -22,26 +28,34 @@ class Reformer(pl.LightningModule):
         self.hp = hp
         self.args = args
         self.hparams = merge_hp(hp, args)
+        self.dataloaders = Dataloaders(hp, args)
 
-    def forward(self, x, mask):
+    def forward(self, x):
         embed = self.embed(x)
-        output = self.proj(self.decoder(embed, embed, mask))
+        output = self.proj(self.decoder(embed, embed))
         return output
 
     def training_step(self, batch, batch_idx):
-        x, y, mask = batch
-        res = self.forward(x, mask)
-        loss = self.criterion(res, y)
+        source, target = batch
+        res = self.forward(source)
+        loss = self.criterion(res, target)
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
 
     def validation_step(self, batch, batch_idx):
-        x, y, mask = batch
-        res = self.forward(x, mask)
-        loss = self.criterion(res, y)
+        source, target = batch
+        res = self.forward(source)
+        loss = self.criterion(res, target)
         resmax = torch.argmax(res, dim=-1)
         conf = F.softmax(res, dim=-1).max(dim=-1)[0]
-        acc = (resmax == y).float().mean()
+        acc = (resmax == target).float().mean()
+        if batch_idx == 0 and self.hp.data.dataset == "music":
+            try:
+                song = roll_to_midi(resmax[0].cpu().numpy())
+                song.write(os.path.join('samples', str(int(time.time())) + '.mid'))
+            except AssertionError as error:
+                print(error)
+                print('Failed to generate sample')
         return {'val_loss': loss, 'val_acc': acc, 'val_confidence': conf}
 
     def validation_end(self, outputs):
@@ -53,12 +67,19 @@ class Reformer(pl.LightningModule):
         return {'avg_val_loss': avg_loss, 'log': tensorboard_logs}
 
     def test_step(self, batch, batch_idx):
-        x, y, mask = batch
-        res = self.forward(x, mask)
-        loss = self.criterion(res, y)
+        source, target = batch
+        res = self.forward(source)
+        loss = self.criterion(res, target)
         resmax = torch.argmax(res, dim=-1)
         conf = F.softmax(res, dim=-1).max(dim=-1)[0]
-        acc = (resmax == y).float().mean()
+        acc = (resmax == target).float().mean()
+        if batch_idx == 0 and self.hp.data.dataset == "music":
+            try:
+                song = roll_to_midi(resmax[0].cpu().numpy())
+                song.write(os.path.join('samples', str(int(time.time())) + '.mid'))
+            except AssertionError as error:
+                print(error)
+                print('Failed to generate sample')
         return {'test_loss': loss, 'test_acc': acc, 'test_confidence': conf}
 
     def test_end(self, outputs):
@@ -81,12 +102,12 @@ class Reformer(pl.LightningModule):
 
     @pl.data_loader
     def train_dataloader(self):
-        return create_dataloader(self.hp, self.args, "train")
+        return self.dataloaders.get_dataloader("train")
 
     @pl.data_loader
     def val_dataloader(self):
-        return create_dataloader(self.hp, self.args, "val")
+        return self.dataloaders.get_dataloader("val")
 
     @pl.data_loader
     def test_dataloader(self):
-        return create_dataloader(self.hp, self.args, "test")
+        return self.dataloaders.get_dataloader("test")

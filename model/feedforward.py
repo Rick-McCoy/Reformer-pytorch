@@ -1,7 +1,7 @@
-import torch
 import torch.nn.functional as F
 
 from torch import nn
+from utils.utils import deterministic_dropout
 
 class ChunkFeedForward(nn.Module):
     def __init__(self, hp, args):
@@ -18,10 +18,8 @@ class ChunkFeedForward(nn.Module):
         output = F.gelu(self.linear1(x))
         # [batch * chunk, length // chunk, d_ff]
         if self.training:
-            generator = torch.Generator(device=output.get_device())
-            generator.manual_seed(seed)
-            dropout_mask = torch.bernoulli(output, p=1 - self.dropout, generator=generator)
-            output = dropout_mask * output / (1 - self.dropout)
+            output = deterministic_dropout(output, seed, dropout=self.dropout)
+            # [batch * chunk, length // chunk, d_ff]
 
         output = self.linear2(output)
         # [batch * chunk, length // chunk, d_model]

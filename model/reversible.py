@@ -11,9 +11,8 @@ class Reversible(Function):
     def forward(ctx, *args):
         layer, x1, x2 = args
         ctx.layer = layer
-        mask = Reversible.mask
         with torch.no_grad():
-            y1, y2 = layer(x1, x2, mask)
+            y1, y2 = layer(x1, x2)
         Reversible.outputs = (y1.detach(), y2.detach())
         return y1, y2
 
@@ -21,7 +20,6 @@ class Reversible(Function):
     def backward(ctx, *grad_outputs):
         y1_grad, y2_grad = grad_outputs
         y1, y2 = Reversible.outputs
-        mask = Reversible.mask
         y1.requires_grad = True
         y2.requires_grad = True
 
@@ -31,17 +29,21 @@ class Reversible(Function):
 
         with torch.no_grad():
             x2 = y2 - gy1
+            del y2, gy1
             x1_grad = y1_grad + y1.grad
+            del y1_grad
             y1.grad = None
 
         with torch.enable_grad():
             x2.requires_grad = True
-            fx2 = ctx.layer.f_block(x2, mask, ctx.layer.f_seed, False)
+            fx2 = ctx.layer.f_block(x2, ctx.layer.f_seed, False)
             fx2.backward(x1_grad)
 
         with torch.no_grad():
             x1 = y1 - fx2
+            del y1, fx2
             x2_grad = y2_grad + x2.grad
+            del y2_grad
             x2.grad = None
 
             Reversible.outputs = (x1.detach(), x2.detach())

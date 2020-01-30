@@ -20,6 +20,8 @@ if __name__ == '__main__':
                         help="enable fast dev run for debugging purposes")
     parser.add_argument('-v', '--version', type=int, required=False, default=None,
                         help="version to resume checkpoint from, default new version")
+    parser.add_argument('-t', '--trace', type=bool, required=False, default=False,
+                        help="enable tracing for debugging purposes")
     args = parser.parse_args()
 
     hp = HParam(args.config)
@@ -48,9 +50,9 @@ if __name__ == '__main__':
         weights_summary='full'
     )
 
-    with torch.autograd.profiler.profile(enabled=args.fast_dev_run, use_cuda=True) as prof:
+    with torch.autograd.profiler.profile(enabled=args.trace, use_cuda=True) as prof:
         trainer.fit(reformer)
         trainer.test(reformer)
 
-    if args.fast_dev_run:
+    if args.trace:
         prof.export_chrome_trace('traces/trace_' + str(logger.version) + '.json')

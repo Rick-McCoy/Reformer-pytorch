@@ -132,6 +132,7 @@ dmypy.json
 logs/
 traces/
 test.py
+samples/
 
 # VSCode
 .vscode
