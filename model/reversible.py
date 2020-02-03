@@ -9,43 +9,43 @@ class Reversible(Function):
 
     @staticmethod
     def forward(ctx, *args):
-        layer, x1, x2 = args
+        layer, input_1, input_2 = args
         ctx.layer = layer
         with torch.no_grad():
-            y1, y2 = layer(x1, x2)
-        Reversible.outputs = (y1.detach(), y2.detach())
-        return y1, y2
+            output_1, output_2 = layer(input_1, input_2)
+        Reversible.outputs = (output_1.detach(), output_2.detach())
+        return output_1, output_2
 
     @staticmethod
     def backward(ctx, *grad_outputs):
-        y1_grad, y2_grad = grad_outputs
-        y1, y2 = Reversible.outputs
-        y1.requires_grad = True
-        y2.requires_grad = True
+        output_1_grad, output_2_grad = grad_outputs
+        output_1, output_2 = Reversible.outputs
+        output_1.requires_grad = True
+        output_2.requires_grad = True
 
         with torch.enable_grad():
-            gy1 = ctx.layer.g_block(y1, ctx.layer.g_seed)
-            gy1.backward(y2_grad)
+            g_output_1 = ctx.layer.g_block(output_1, ctx.layer.g_seed)
+            g_output_1.backward(output_2_grad)
 
         with torch.no_grad():
-            x2 = y2 - gy1
-            del y2, gy1
-            x1_grad = y1_grad + y1.grad
-            del y1_grad
-            y1.grad = None
+            input_2 = output_2 - g_output_1
+            del output_2, g_output_1
+            input_1_grad = output_1_grad + output_1.grad
+            del output_1_grad
+            output_1.grad = None
 
         with torch.enable_grad():
-            x2.requires_grad = True
-            fx2 = ctx.layer.f_block(x2, ctx.layer.f_seed, False)
-            fx2.backward(x1_grad)
+            input_2.requires_grad = True
+            finput_2 = ctx.layer.f_block(input_2, ctx.layer.f_seed, False)
+            finput_2.backward(input_1_grad)
 
         with torch.no_grad():
-            x1 = y1 - fx2
-            del y1, fx2
-            x2_grad = y2_grad + x2.grad
-            del y2_grad
-            x2.grad = None
+            input_1 = output_1 - finput_2
+            del output_1, finput_2
+            input_2_grad = output_2_grad + input_2.grad
+            del output_2_grad
+            input_2.grad = None
 
-            Reversible.outputs = (x1.detach(), x2.detach())
+            Reversible.outputs = (input_1.detach(), input_2.detach())
 
-        return (None, x1_grad, x2_grad, None)
+        return (None, input_1_grad, input_2_grad, None)

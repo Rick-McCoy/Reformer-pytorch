@@ -36,19 +36,19 @@ class Reformer(pl.LightningModule):
         return output
 
     def training_step(self, batch, batch_idx):
-        source, target = batch
+        source, target, _ = batch
         res = self.forward(source)
         loss = self.criterion(res, target)
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
 
     def validation_step(self, batch, batch_idx):
-        source, target = batch
+        source, target, accuracy_mask = batch
         res = self.forward(source)
         loss = self.criterion(res, target)
         resmax = torch.argmax(res, dim=-1)
         conf = F.softmax(res, dim=-1).max(dim=-1)[0]
-        acc = (resmax == target).float().mean()
+        acc = (resmax == target).flatten().masked_select(accuracy_mask.flatten()).float().mean()
         if batch_idx == 0 and self.hp.data.dataset == "music":
             try:
                 song = roll_to_midi(resmax[0].cpu().numpy())
@@ -67,12 +67,12 @@ class Reformer(pl.LightningModule):
         return {'avg_val_loss': avg_loss, 'log': tensorboard_logs}
 
     def test_step(self, batch, batch_idx):
-        source, target = batch
+        source, target, accuracy_mask = batch
         res = self.forward(source)
         loss = self.criterion(res, target)
         resmax = torch.argmax(res, dim=-1)
         conf = F.softmax(res, dim=-1).max(dim=-1)[0]
-        acc = (resmax == target).float().mean()
+        acc = (resmax == target).flatten().masked_select(accuracy_mask.flatten()).float().mean()
         if batch_idx == 0 and self.hp.data.dataset == "music":
             try:
                 song = roll_to_midi(resmax[0].cpu().numpy())

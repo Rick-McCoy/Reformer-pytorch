@@ -80,4 +80,5 @@ class MusicDataset(Dataset):
         src = torch.from_numpy(
             midi_to_roll(self.pathlist[idx], self.data_length + 1)
         )
-        return src[:-1], src[1:]
+        accuracy_mask = src[1:] != (self.vocab - 1)
+        return src[:-1], src[1:], accuracy_mask

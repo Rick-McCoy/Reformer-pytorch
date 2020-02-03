@@ -47,7 +47,9 @@ if __name__ == '__main__':
         accumulate_grad_batches=hp.train.accumulate,
         min_nb_epochs=hp.train.epochs,
         max_nb_epochs=hp.train.epochs,
-        weights_summary='full'
+        weights_summary='full',
+        early_stop_callback=None,
+        val_check_interval=0.5
     )
 
     with torch.autograd.profiler.profile(enabled=args.trace, use_cuda=True) as prof:

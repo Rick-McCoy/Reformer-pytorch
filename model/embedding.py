@@ -17,7 +17,7 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(hp.model.dropout)
         self.register_buffer(
-            'pe', self.get_encodings(hp.data.data_length, hp.model.d_model)
+            'positional_encoding', self.get_encodings(hp.data.data_length, hp.model.d_model)
         )
 
     def get_encodings(self, data_length, d_model) -> torch.Tensor:
@@ -30,5 +30,5 @@ class PositionalEncoding(nn.Module):
         return positional_encoding[None, ...]
 
     def forward(self, x):
-        x = x + self.pe[:, :x.size(1)].detach()
+        x = x + self.positional_encoding[:, :x.size(1)].detach()
         return self.dropout(x)

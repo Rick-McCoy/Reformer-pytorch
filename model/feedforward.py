@@ -1,3 +1,4 @@
+import torch
 import torch.nn.functional as F
 
 from torch import nn
@@ -11,18 +12,19 @@ class ChunkFeedForward(nn.Module):
         self.linear2 = nn.Linear(hp.model.d_ff, hp.model.d_model)
         self.dropout = hp.model.dropout
 
-    def forward(self, x, seed):
+    def forward(self, input_tensor, seed):
         # [batch, length, d_model]
-        x = x.reshape(-1, x.size(1) // self.chunk, x.size(2))
-        # [batch * chunk, length // chunk, d_model]
-        output = F.gelu(self.linear1(x))
-        # [batch * chunk, length // chunk, d_ff]
+        chunks = torch.chunk(input_tensor, chunks=self.chunk, dim=1)
+        # [batch, length // chunk, d_model]
+        output = [F.gelu(self.linear1(chunk)) for chunk in chunks]
+        # [batch, length // chunk, d_ff]
         if self.training:
-            output = deterministic_dropout(output, seed, dropout=self.dropout)
-            # [batch * chunk, length // chunk, d_ff]
+            output = [
+                deterministic_dropout(chunk, seed + i, dropout=self.dropout)\
+                    for chunk, i in zip(output, range(self.chunk))
+            ]
+            # [batch, length // chunk, d_ff]
 
-        output = self.linear2(output)
-        # [batch * chunk, length // chunk, d_model]
-        output = output.reshape(-1, output.size(1) * self.chunk, output.size(2))
+        output = torch.cat([self.linear2(chunk) for chunk in output], dim=1)
         # [batch, length, d_model]
         return output

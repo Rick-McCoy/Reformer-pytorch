@@ -5,7 +5,7 @@ import numpy as np
 def midi_to_roll(path, output_length) -> np.ndarray:
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        song = pm.PrettyMIDI(str(path).replace('\\', '/'))
+        song = pm.PrettyMIDI(str(path))
     event_list = []
     for inst in song.instruments:
         for note in inst.notes:
@@ -28,7 +28,7 @@ def midi_to_roll(path, output_length) -> np.ndarray:
             delta % 128 + 768, delta // 128 + 896
         ])
         current_time = event[0]
-    input_list += [1025] * 7
+    input_list += [1024] * 7
     if len(input_list) < output_length:
         input_list.extend([1025] * (output_length - len(input_list)))
     num = int(np.random.randint(0, len(input_list) - output_length + 1))
@@ -60,8 +60,7 @@ def roll_to_midi(roll) -> pm.PrettyMIDI:
             if step > 10:
                 print('Generation stopped at step {}'.format(step))
                 break
-            else:
-                raise
+            raise
         instrument = min(128, event[0])
         dur = (event[3] - 512) + (event[4] - 640) * 128
         delta = (event[5] - 768) + (event[6] - 896) * 128

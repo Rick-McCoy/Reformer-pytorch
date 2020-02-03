@@ -22,10 +22,10 @@ def reverse_sort(indice: torch.Tensor, dim: int) -> torch.Tensor:
     '''
     Unsorts sorted indice
     '''
-    size = indice.size(dim)
-    new_size = [1] * dim + [size] + [1] * (indice.dim() - dim - 1)
+    new_size = [1] * indice.dim()
+    new_size[dim] = indice.size(dim)
     arange = indice.new_empty(size=new_size)
-    torch.arange(size, out=arange)
+    torch.arange(new_size[dim], out=arange)
     arange = arange.expand_as(indice)
     new_indice = torch.empty_like(indice)
     new_indice.scatter_(dim=dim, index=indice, src=arange)
@@ -35,7 +35,8 @@ def expand(input_tensor: torch.Tensor, dim=0, num=1) -> torch.Tensor:
     '''
     Shortcut for unsqueeze + expand
     '''
-    new_size = [-1] * dim + [num] + [-1] * (input_tensor.dim() - dim)
+    new_size = [-1] * (input_tensor.dim() + 1)
+    new_size[dim] = num
     return input_tensor.unsqueeze(dim=dim).expand(new_size)
 
 def get_dup_keys(input_tensor: torch.Tensor, rounds=0) -> torch.Tensor:
@@ -50,7 +51,6 @@ def get_dup_keys(input_tensor: torch.Tensor, rounds=0) -> torch.Tensor:
     count_key_indice = reverse_sort(flat_key_indice, dim=2)
     # [batch * head, length, bucket_length * 4 * rounds]
     return torch.gather(count_shift_keys, dim=-1, index=count_key_indice)
-
 
 class LocalitySensitiveHash(nn.Module):
     '''
@@ -76,6 +76,7 @@ class LocalitySensitiveHash(nn.Module):
         hashes = torch.einsum('...ij,...jkl->...ikl', inp, self.rand_matrix)
         # [batch * head, length, rounds, n_buckets // 2]
         return torch.argmax(torch.cat([hashes, -hashes], dim=-1), dim=-1).int()
+        # [batch * head, length, rounds]
 
 class LSHAttention(nn.Module):
     '''
@@ -84,7 +85,6 @@ class LSHAttention(nn.Module):
     '''
     def __init__(self, hp, args):
         super(LSHAttention, self).__init__()
-        self.head = hp.model.head
         self.d_k = hp.model.d_model // hp.model.head
         self.rounds = hp.model.rounds
         self.dropout = hp.model.dropout
@@ -92,22 +92,20 @@ class LSHAttention(nn.Module):
         self.lsh = LocalitySensitiveHash(hp, args)
 
     def forward(self, query, value, seed, random=True):
-        length = query.size(2)
+        length = query.size(1)
         n_buckets = length // self.bucket_length
 
         normalized_query = query / torch.norm(query, dim=-1, keepdim=True)
-        # [batch, head, length, d_k]
-        flattened_query = normalized_query.flatten(0, 1)
         # [batch * head, length, d_k]
 
-        hashes = self.lsh(flattened_query, n_buckets, random)
+        hashes = self.lsh(normalized_query, n_buckets, random)
         # [batch * head, length, rounds]
         sorted_hashes, hash_indice = torch.sort(hashes, dim=1)
         # [batch * head, length, rounds]
         expanded_hash_indice = expand(hash_indice, dim=2, num=self.d_k)
         # [batch * head, length, d_k, rounds]
 
-        expanded_query = expand(flattened_query, dim=3, num=self.rounds)
+        expanded_query = expand(normalized_query, dim=3, num=self.rounds)
         # [batch * head, length, d_k, rounds]
         reordered_query = torch.gather(expanded_query, dim=1, index=expanded_hash_indice)
         # [batch * head, length, d_k, rounds]
@@ -138,6 +136,7 @@ class LSHAttention(nn.Module):
             -1, n_buckets // 2, self.bucket_length * 2, self.rounds
         )
         # [batch * head, n_buckets // 2, bucket_length * 2, rounds]
+
         key_indice = look_back(query_indice)
         # [batch * head, n_buckets // 2, bucket_length * 4, rounds]
 
@@ -168,7 +167,7 @@ class LSHAttention(nn.Module):
         # [batch * head, length, bucket_length * 4, rounds]
         scores = torch.gather(scores, dim=1, index=score_indice)
         # [batch * head, length, bucket_length * 4, rounds]
-        scores = scores.flatten(-2, -1) - count_key.float().log().detach()
+        scores = scores.flatten(-2, -1) - count_key.float().log_().detach_()
         # [batch * head, length, bucket_length * 4 * rounds]
         p_attn = F.softmax(scores, dim=-1)
         # [batch * head, length, bucket_length * 4 * rounds]
@@ -180,9 +179,9 @@ class LSHAttention(nn.Module):
         p_attn = p_attn.reshape(-1, length, self.bucket_length * 4, self.rounds)
         # [batch * head, length, bucket_length * 4, rounds]
 
-        flattened_value = expand(value.flatten(0, 1), dim=3, num=self.rounds)
+        expanded_value = expand(value, dim=3, num=self.rounds)
         # [batch * head, length, d_k, rounds]
-        reordered_value = torch.gather(flattened_value, dim=1, index=expanded_hash_indice)
+        reordered_value = torch.gather(expanded_value, dim=1, index=expanded_hash_indice)
         # [batch * head, length, d_k, rounds]
         reshaped_value = reordered_value.reshape(
             -1, n_buckets // 2, self.bucket_length * 2, self.d_k, self.rounds
@@ -208,8 +207,6 @@ class LSHAttention(nn.Module):
         # [batch * head, length, d_k, rounds]
         attention = torch.gather(attention, dim=1, index=new_indice).sum(dim=-1)
         # [batch * head, length, d_k]
-        attention = attention.reshape(-1, self.head, length, self.d_k)
-        # [batch, head, length, d_k]
 
         return attention
 
@@ -222,6 +219,7 @@ class MultiRoundLSHAttention(nn.Module):
         super(MultiRoundLSHAttention, self).__init__()
         self.d_k = hp.model.d_model // hp.model.head
         self.head = hp.model.head
+        self.chunk = hp.model.chunk
         self.linear_query = nn.Linear(hp.model.d_model, hp.model.d_model)
         self.linear_value = nn.Linear(hp.model.d_model, hp.model.d_model)
         self.linear_out = nn.Linear(hp.model.d_model, hp.model.d_model)
@@ -235,7 +233,15 @@ class MultiRoundLSHAttention(nn.Module):
         value = self.linear_value(value).reshape(-1, length, self.head, self.d_k).transpose(1, 2)
         # [batch, head, length, d_k]
 
-        attention = self.lshattention(query, value, seed, random)
+        chunked_query = torch.chunk(query.flatten(0, 1), chunks=self.chunk, dim=0)
+        # [batch * head // chunk, length, d_k]
+        chunked_value = torch.chunk(value.flatten(0, 1), chunks=self.chunk, dim=0)
+        # [batch * head // chunk, length, d_k]
+
+        attention = torch.cat([
+            self.lshattention(q, v, seed + i, random) for q, v, i\
+                in zip(chunked_query, chunked_value, range(self.chunk))
+        ], dim=0).reshape(-1, self.head, length, self.d_k)
         # [batch, head, length, d_k]
 
         attention = attention.transpose(1, 2).flatten(-2, -1)
