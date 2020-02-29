@@ -36,12 +36,12 @@ class Reversible(Function):
 
         with torch.enable_grad():
             input_2.requires_grad = True
-            finput_2 = ctx.layer.f_block(input_2, ctx.layer.f_seed, False)
-            finput_2.backward(input_1_grad)
+            f_input_2 = ctx.layer.f_block(input_2, ctx.layer.f_seed, False)
+            f_input_2.backward(input_1_grad)
 
         with torch.no_grad():
-            input_1 = output_1 - finput_2
-            del output_1, finput_2
+            input_1 = output_1 - f_input_2
+            del output_1, f_input_2
             input_2_grad = output_2_grad + input_2.grad
             del output_2_grad
             input_2.grad = None

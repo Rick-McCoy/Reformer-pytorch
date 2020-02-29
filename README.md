@@ -3,7 +3,7 @@ Implements [Reformer: The Efficient Transformer](https://openreview.net/forum?id
 
 ## Prerequisites
 
-- Tested with Python 3.7.5, Pytorch 1.3.1.
+- Tested with Python 3.7.5, Pytorch 1.4.0.
 - This code is built upon the [pytorch-lightning](https://github.com/williamFalcon/pytorch-lightning/) framework.
 - `pip install -r requirements.txt`
 
@@ -11,15 +11,16 @@ Implements [Reformer: The Efficient Transformer](https://openreview.net/forum?id
 
 ### Datasets
 
-- Currently only the synthetic dataset described in the paper is implemented.
-- Various parameters are editable in `config\synthetic.yaml` under `data:`.
+- If you want to modify `trainer.py` or `model\model.py`, it is recommended that you familiarize with youself the `pytorch-lightning` library beforehand.
+- A custom copy task & music dataset has been implemented under `datasets\dataloader.py`. Modify as needed.
+- A config yaml file must be placed under `config`. See provided yaml files for basic framework.
 
 ### Running the code
 
 - `python3 trainer.py -c \path\to\config\yaml -n [name of run] -b [batch size] -f [fast dev run] -v [version number]`
 - The `-f` flag is used for debugging; only one batch of training, validation, and testing will be calculated.
 - The `-v` flag is used for resuming from checkpoints; leave empty for new version.
-- A toy copy task of length 32, vocab 128 converges around ~6k steps using a batch size of 1024, learning rate of 1e-3 and Adam. The checkpoint is located under `checkpoints/`.
+- A toy copy task of length 32, vocab 128 converges around ~6k steps using a batch size of 1024, learning rate of 1e-3 and Adam. The checkpoint is located under `checkpoints\`.
 
 ![Validation accuracy](assets/Validation_accuracy_tensorboard.png)
 
@@ -27,11 +28,12 @@ Implements [Reformer: The Efficient Transformer](https://openreview.net/forum?id
 
 ### Preparing the checkpoints
 
-- Currently not implemented.
+- A complete checkpoint folder must be placed under `logs\`. Use the entire folder pytorch-lightning automatically saves.
 
 ### Running the code
 
-- Currently not implemented.
+- A corresponding version number must be provided with a `-v` flag.
+- Run the code with the `-s` flag set to `True`. This will generate 1 sample under `sample\`, if using the music dataset.
 
 ## To-do
 
@@ -40,8 +42,8 @@ Implements [Reformer: The Efficient Transformer](https://openreview.net/forum?id
 - [x] Implement Label Smoothing
 - [x] Implement LSH attention
 - [x] Implement reversible layer
+- [x] Implement autoregressive sampling
 - [ ] Implement various datasets
-- [ ] Implement sampling
 
 ## Implementation Authors
 

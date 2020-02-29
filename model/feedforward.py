@@ -12,7 +12,7 @@ class ChunkFeedForward(nn.Module):
         self.linear2 = nn.Linear(hp.model.d_ff, hp.model.d_model)
         self.dropout = hp.model.dropout
 
-    def forward(self, input_tensor, seed):
+    def forward(self, input_tensor, seed, random=True):
         # [batch, length, d_model]
         chunks = torch.chunk(input_tensor, chunks=self.chunk, dim=1)
         # [batch, length // chunk, d_model]

@@ -11,9 +11,10 @@ class Dataloaders:
     def __init__(self, hp, args):
         pathlist = list(pathlib.Path(hp.data.path).glob('**/*.[Mm][Ii][Dd]'))
         np.random.shuffle(pathlist)
-        self.trainlist = pathlist[:-2048]
-        self.validlist = pathlist[-2048:-1024]
-        self.testlist = pathlist[-1024:]
+        self.split = hp.data.valid_split
+        self.trainlist = pathlist[:-self.split * 2]
+        self.validlist = pathlist[-self.split * 2:-self.split]
+        self.testlist = pathlist[-self.split:]
         self.hp = hp
         self.args = args
 
@@ -30,7 +31,7 @@ class Dataloaders:
         if self.hp.data.dataset == "synthetic":
             dataset = CopyDataSet(self.hp, self.args)
         elif self.hp.data.dataset == "music":
-            dataset = MusicDataset(self.hp, self.args, self.get_pathlist(mode))
+            dataset = MusicDataset(self.hp, self.args, self.get_pathlist(mode), mode == "train")
         else:
             raise NotImplementedError
         sampler = RandomSampler(dataset) if platform.system() == "Windows"\
@@ -51,6 +52,7 @@ class CopyDataSet(Dataset):
         super(CopyDataSet, self).__init__()
         self.dataset_length = hp.data.dataset_length
         self.data_length = hp.data.data_length
+        self.padding_idx = -1
         self.vocab = hp.data.vocab
 
     def __len__(self):
@@ -64,21 +66,23 @@ class CopyDataSet(Dataset):
         src = torch.cat([src, src, torch.LongTensor([0])], dim=0)
         x = src[:-1]
         y = src[1:]
-        return x, y
+        mask = y != self.padding_idx
+        return x, y, mask
 
 class MusicDataset(Dataset):
-    def __init__(self, hp, args, pathlist):
+    def __init__(self, hp, args, pathlist, augment):
         super(MusicDataset, self).__init__()
         self.data_length = hp.data.data_length
-        self.vocab = hp.data.vocab
+        self.padding_idx = hp.data.vocab[0] - 1
         self.pathlist = pathlist
+        self.augment = augment
 
     def __len__(self):
         return len(self.pathlist)
 
     def __getitem__(self, idx):
         src = torch.from_numpy(
-            midi_to_roll(self.pathlist[idx], self.data_length + 1)
+            midi_to_roll(self.pathlist[idx], self.data_length + 1, self.augment)
         )
-        accuracy_mask = src[1:] != (self.vocab - 1)
-        return src[:-1], src[1:], accuracy_mask
+        mask = src[1:, 0] != self.padding_idx
+        return src[:-1], src[1:], mask

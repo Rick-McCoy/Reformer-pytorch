@@ -22,11 +22,15 @@ if __name__ == '__main__':
                         help="version to resume checkpoint from, default new version")
     parser.add_argument('-t', '--trace', type=bool, required=False, default=False,
                         help="enable tracing for debugging purposes")
+    parser.add_argument('-s', '--sample', type=bool, required=False, default=False,
+                        help="enable sampling, overrides -f")
     args = parser.parse_args()
 
+    if args.sample:
+        args.fast_dev_run = True
+
     hp = HParam(args.config)
-    with open(args.config, 'r') as f:
-        hp_str = ''.join(f.readlines())
+
     if platform.system() == 'Windows':
         hp.train.num_workers = 0
 
@@ -53,7 +57,8 @@ if __name__ == '__main__':
     )
 
     with torch.autograd.profiler.profile(enabled=args.trace, use_cuda=True) as prof:
-        trainer.fit(reformer)
+        if not args.sample:
+            trainer.fit(reformer)
         trainer.test(reformer)
 
     if args.trace:

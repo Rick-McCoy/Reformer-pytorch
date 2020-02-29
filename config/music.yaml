@@ -10,14 +10,15 @@ model:
 ---
 data:
   dataset: "music"
-  path: "../Datasets/Classics"
-  data_length: 16384
-  vocab: 1026
+  path: "../Datasets/Classics/TPD"
+  data_length: 8192
+  vocab: [132, 131, 131, 131, 131, 131, 131]
+  valid_split: 1024
 ---
 train:
   num_workers: 8
-  accumulate: 1
-  lr: 0.001
+  accumulate: 4
+  lr: 0.0001
   smoothing: 0.1
   epochs: 100000000
 ---
