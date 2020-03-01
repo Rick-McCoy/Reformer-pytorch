@@ -40,7 +40,7 @@ class Block(nn.Module):
 
     def forward(self, x, seed, random=True):
         norm = self.norm(x)
-        out = self.func(norm, norm, (1 << 63) - seed, random)
+        out = self.func(norm, (1 << 63) - seed, random)
 
         if self.training:
             return deterministic_dropout(out, seed=seed, dropout=self.dropout)

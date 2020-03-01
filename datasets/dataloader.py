@@ -81,8 +81,13 @@ class MusicDataset(Dataset):
         return len(self.pathlist)
 
     def __getitem__(self, idx):
-        src = torch.from_numpy(
-            midi_to_roll(self.pathlist[idx], self.data_length + 1, self.augment)
-        )
-        mask = src[1:, 0] != self.padding_idx
-        return src[:-1], src[1:], mask
+        while True:
+            try:
+                src = torch.from_numpy(
+                    midi_to_roll(self.pathlist[idx], self.data_length + 1, self.augment)
+                )
+                mask = src[1:, 0] != self.padding_idx
+                return src[:-1], src[1:], mask
+            except:
+                idx = np.random.randint(0, len(self.pathlist))
+                continue
